@@ -102,6 +102,10 @@ struct Args {
     #[clap(long, requires("mitm"))]
     disable_media_sink: bool,
 
+    /// MITM: Disable tts sink
+    #[clap(long, requires("mitm"))]
+    disable_tts_sink: bool,
+    
     /// MITM: Developer mode
     #[clap(long, requires("mitm"))]
     developer_mode: bool,
@@ -304,6 +308,7 @@ fn main() {
     let dpi = args.dpi;
     let developer_mode = args.developer_mode;
     let disable_media_sink = args.disable_media_sink;
+    let disable_tts_sink = args.disable_tts_sink;
 
     // build and spawn main tokio runtime
     let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
@@ -320,6 +325,7 @@ fn main() {
         dpi,
         developer_mode,
         disable_media_sink,
+        disable_tts_sink,
     ));
 
     info!(

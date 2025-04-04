@@ -230,9 +230,10 @@ pub async fn pkt_modify_hook(
     dpi: Option<u16>,
     developer_mode: bool,
     disable_media_sink: bool,
-) -> Result<()> {
+    disable_tts_sink: bool,
+) -> Result<bool> {
     if pkt.channel != 0 {
-        return Ok(());
+        return Ok(false);
     }
 
     // message_id is the first 2 bytes of payload
@@ -245,6 +246,13 @@ pub async fn pkt_modify_hook(
     // parsing data
     let data = &pkt.payload[2..]; // start of message data
     match control.unwrap_or(MESSAGE_UNEXPECTED_MESSAGE) {
+        MESSAGE_AUDIO_FOCUS_REQUEST => {
+            if disable_media_sink {
+            return Ok(true);
+            } else { 
+                return Ok(false);
+            }
+        }
         MESSAGE_SERVICE_DISCOVERY_RESPONSE => {
             let mut msg = ServiceDiscoveryResponse::parse_from_bytes(data)?;
 
@@ -296,10 +304,10 @@ pub async fn pkt_modify_hook(
             pkt.payload.insert(0, (message_id >> 8) as u8);
             pkt.payload.insert(1, (message_id & 0xff) as u8);
         }
-        _ => return Ok(()),
+        _ => return Ok(false),
     };
 
-    Ok(())
+    Ok(false)
 }
 
 /// encapsulates SSL data into Packet and transmits
@@ -432,6 +440,7 @@ pub async fn proxy<A: Endpoint<A> + 'static>(
     dpi: Option<u16>,
     developer_mode: bool,
     disable_media_sink: bool,
+    disable_tts_sink: bool,
 ) -> Result<()> {
     let ssl = ssl_builder(proxy_type).await?;
 
@@ -505,16 +514,19 @@ pub async fn proxy<A: Endpoint<A> + 'static>(
     loop {
         // handling data from opposite device's thread, which needs to be transmitted
         if let Ok(mut pkt) = rx.try_recv() {
-            pkt_modify_hook(
+            let handled = pkt_modify_hook(
                 proxy_type,
                 &mut pkt,
                 dpi,
                 developer_mode,
                 disable_media_sink,
+                disable_tts_sink,
             )
             .await?;
-            pkt.encrypt_payload(&mut mem_buf, &mut server).await?;
-            pkt.transmit(&mut device).await?;
+            if !handled {
+                pkt.encrypt_payload(&mut mem_buf, &mut server).await?;
+                pkt.transmit(&mut device).await?;
+            }
 
             // Increment byte counters for statistics
             // fixme: compute final_len for precise stats
@@ -526,7 +538,18 @@ pub async fn proxy<A: Endpoint<A> + 'static>(
             match pkt.decrypt_payload(&mut mem_buf, &mut server).await {
                 Ok(_) => {
                     let _ = pkt_debug(&pkt.payload).await;
-                    tx.send(pkt).await?;
+                    let handled = pkt_modify_hook(
+                        proxy_type,
+                        &mut pkt,
+                        dpi,
+                        developer_mode,
+                        disable_media_sink,
+                        disable_tts_sink,
+                    )
+                    .await?;
+                    if !handled {
+                        tx.send(pkt).await?;
+                    }
                 }
                 Err(e) => error!("decrypt_payload: {:?}", e),
             }

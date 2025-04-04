@@ -247,7 +247,7 @@ pub async fn pkt_modify_hook(
     let data = &pkt.payload[2..]; // start of message data
     match control.unwrap_or(MESSAGE_UNEXPECTED_MESSAGE) {
         MESSAGE_AUDIO_FOCUS_REQUEST => {
-            if disable_media_sink {
+            if disable_tts_sink {
             return Ok(true);
             } else { 
                 return Ok(false);

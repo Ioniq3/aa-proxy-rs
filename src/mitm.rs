@@ -16,6 +16,7 @@ use tokio_uring::buf::BoundedBuf;
 include!(concat!(env!("OUT_DIR"), "/protos/mod.rs"));
 use crate::mitm::protos::*;
 use crate::mitm::AudioStreamType::AUDIO_STREAM_MEDIA;
+use crate::mitm::AudioStreamType::AUDIO_STREAM_SYSTEM_AUDIO;
 use protobuf::text_format::print_to_string_pretty;
 use protobuf::{Enum, Message, MessageDyn};
 use protos::ControlMessageType::{self, *};
@@ -230,6 +231,7 @@ pub async fn pkt_modify_hook(
     dpi: Option<u16>,
     developer_mode: bool,
     disable_media_sink: bool,
+    disable_tts_sink: bool,
 ) -> Result<()> {
     if pkt.channel != 0 {
         return Ok(());
@@ -279,6 +281,20 @@ pub async fn pkt_modify_hook(
                 );
             }
 
+            // disable tts sink
+            if disable_tts_sink {
+                msg.services[4]
+                .media_sink_service
+                .as_mut()
+                .unwrap()
+                .set_audio_type(AUDIO_STREAM_SYSTEM_AUDIO);
+                info!(
+                    "{} <yellow>{:?}</>: media tts disabled",
+                    get_name(proxy_type),
+                    control.unwrap(),
+                );
+            }
+            
             // enabling developer mode
             if developer_mode {
                 msg.set_make("Google".into());
@@ -432,6 +448,7 @@ pub async fn proxy<A: Endpoint<A> + 'static>(
     dpi: Option<u16>,
     developer_mode: bool,
     disable_media_sink: bool,
+    disable_media_sink: bool,
 ) -> Result<()> {
     let ssl = ssl_builder(proxy_type).await?;
 
@@ -511,6 +528,7 @@ pub async fn proxy<A: Endpoint<A> + 'static>(
                 dpi,
                 developer_mode,
                 disable_media_sink,
+                disable_tts_sink,
             )
             .await?;
             pkt.encrypt_payload(&mut mem_buf, &mut server).await?;

@@ -92,7 +92,7 @@ pub async fn init(
     adapter.set_powered(true).await?;
     adapter.set_pairable(true).await?;
 
-    if advertise {
+    if !advertise {
         adapter.set_discoverable(true).await?;
         adapter.set_discoverable_timeout(0).await?;
     }
@@ -572,6 +572,7 @@ impl Bluetooth {
         profile_connected: Arc<AtomicBool>,
     ) -> Result<()> {
         // Use the provided session and adapter instead of creating new ones
+        if !self.adapter.is_powered().await? { let _ = self.adapter.set_powered(true).await; }
         let (address, mut stream) = self
             .get_aa_profile_connection(dongle_mode, connect, bt_timeout, stopped)
             .await?;
@@ -621,7 +622,7 @@ impl Bluetooth {
             // handshake complete, now disconnect the device so it should
             // connect to real HU for calls
             let device = self.adapter.device(bluer::Address(*address))?;
-            let _ = device.disconnect().await;
+            let _ = self.adapter.set_powered(false).await;
         }
 
         info!("{} 🚀 Bluetooth launch sequence completed", NAME);
